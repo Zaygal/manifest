@@ -1,0 +1,58 @@
+[
+  {
+    "type": "function",
+    "name": "pay",
+    "stateMutability": "payable",
+    "inputs": [
+      { "name": "payees",  "type": "address[]" },
+      { "name": "amounts", "type": "uint256[]" },
+      { "name": "notes",   "type": "string[]" },
+      { "name": "label",   "type": "string" }
+    ],
+    "outputs": [{ "name": "batchId", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "batches",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "totalOf",
+    "stateMutability": "pure",
+    "inputs": [{ "name": "amounts", "type": "uint256[]" }],
+    "outputs": [{ "name": "sum", "type": "uint256" }]
+  },
+  {
+    "type": "event",
+    "name": "Batch",
+    "anonymous": false,
+    "inputs": [
+      { "name": "batchId", "type": "uint256", "indexed": true },
+      { "name": "payer",   "type": "address", "indexed": true },
+      { "name": "total",   "type": "uint256", "indexed": false },
+      { "name": "lines",   "type": "uint256", "indexed": false },
+      { "name": "label",   "type": "string",  "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "Paid",
+    "anonymous": false,
+    "inputs": [
+      { "name": "batchId", "type": "uint256", "indexed": true },
+      { "name": "payer",   "type": "address", "indexed": true },
+      { "name": "payee",   "type": "address", "indexed": true },
+      { "name": "amount",  "type": "uint256", "indexed": false },
+      { "name": "note",    "type": "string",  "indexed": false }
+    ]
+  },
+  { "type": "error", "name": "EmptyManifest",  "inputs": [] },
+  { "type": "error", "name": "LengthMismatch", "inputs": [ { "name": "payees", "type": "uint256" }, { "name": "amounts", "type": "uint256" }, { "name": "notes", "type": "uint256" } ] },
+  { "type": "error", "name": "PayeeIsZero",    "inputs": [ { "name": "index", "type": "uint256" } ] },
+  { "type": "error", "name": "AmountIsZero",   "inputs": [ { "name": "index", "type": "uint256" } ] },
+  { "type": "error", "name": "NotFullyFunded", "inputs": [ { "name": "required", "type": "uint256" }, { "name": "sent", "type": "uint256" } ] },
+  { "type": "error", "name": "PaymentFailed",  "inputs": [ { "name": "index", "type": "uint256" }, { "name": "payee", "type": "address" } ] }
+]
