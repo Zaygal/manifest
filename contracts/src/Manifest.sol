@@ -22,7 +22,7 @@ pragma solidity ^0.8.24;
 /// The contract never holds a balance between calls: everything sent in is
 /// distributed in the same transaction, and a single failed transfer reverts the
 /// entire batch rather than leaving it half paid.
-/// Three static-analysis findings are accepted here deliberately, because each
+/// Four static-analysis findings are accepted here deliberately, because each
 /// one describes the product rather than a defect - they are listed so a reader
 /// knows they were considered rather than missed:
 ///
@@ -33,6 +33,9 @@ pragma solidity ^0.8.24;
 ///  * `require-revert-in-loop` - reverting mid-loop is the atomicity guarantee. A
 ///    manifest is settled in full or not at all, which is why one refusing payee
 ///    cannot leave the earlier lines paid.
+///  * `reentrancy-events` - an event inside a loop can follow an earlier
+///    iteration's call. Accepted for the same reason: the amounts on a receipt
+///    come from the chain's own Transfer log, not from these events.
 contract Manifest {
     /// @notice Number of batches this contract has settled. Doubles as the next
     /// batch id, so a receipt can be identified by (contract, batchId).
@@ -84,7 +87,7 @@ contract Manifest {
             revert LengthMismatch(n, amounts.length, notes.length);
         }
 
-        uint256 required;
+        uint256 required = 0;
         for (uint256 i = 0; i < n; ++i) {
             if (payees[i] == address(0)) revert PayeeIsZero(i);
             if (amounts[i] == 0) revert AmountIsZero(i);
@@ -98,11 +101,17 @@ contract Manifest {
         emit Batch(batchId, msg.sender, required, n, label);
 
         for (uint256 i = 0; i < n; ++i) {
-            // Emitted BEFORE the transfer so the log order always matches the
-            // manifest order. Emitting afterwards would let a re-entrant payee
-            // interleave its own logs ahead of this line: every event carries its
-            // batchId so the reading stays unambiguous, but deterministic order
-            // costs nothing.
+            // Emitted before the transfer so that in the ordinary case the log
+            // order matches the manifest order.
+            //
+            // The linter still reports reentrancy-events on this line, and it is
+            // right that an emit inside a loop can follow an earlier iteration's
+            // call - reordering does not silence it and the first version of this
+            // comment wrongly claimed it did. It is accepted: a re-entrant payee
+            // can only interleave events from its own batch, every event names its
+            // batchId and payer, and no value rests here between calls. Decisively,
+            // the receipt does not trust these events for the amount at all - it
+            // reads the chain's own Transfer log, which event ordering cannot forge.
             emit Paid(batchId, msg.sender, payees[i], amounts[i], notes[i]);
             (bool ok, ) = payees[i].call{value: amounts[i]}("");
             if (!ok) revert PaymentFailed(i, payees[i]);

@@ -47,11 +47,15 @@ documented in the source so that a reader knows they were weighed:
 | `arbitrary-send-eth` | Sending native value to a caller-supplied address **is** the product. Value never rests in the contract. |
 | `calls-loop` | The external call in a loop is the batching. Nothing is read back from a payee, so one line cannot influence the next. |
 | `require-revert-in-loop` | Reverting mid-loop is the atomicity guarantee. Full settlement or none. |
-| `reentrancy-events` | **Fixed, not accepted.** `Paid` is now emitted *before* the transfer, so log order always matches manifest order and a re-entrant payee cannot interleave its logs ahead of a line. |
+| `reentrancy-events` | **Accepted.** `Paid` is emitted *before* the transfer so log order normally matches manifest order, but that does **not** silence the finding — an emit inside a loop can always follow an earlier iteration's call. An earlier version of this note claimed it was fixed; it was not, and the claim is corrected here. It is harmless because a receipt takes its amounts from the chain's own Transfer log, which event ordering cannot forge. |
 
-Two further warnings were genuine dead code and were fixed: an uninitialised loop
-counter that the linter read as a variable read before assignment, and an unused
-tuple binding in the tests.
+Two further warnings were genuine and were fixed: `required` was read by `+=`
+before being assigned, and the tests had a dead tuple binding.
+
+An earlier attempt fixed the *loop counter* instead of `required`, which silenced
+nothing — the linter was pointing at the accumulator, not the counter. Worth
+recording, because the failure mode was reading the warning's headline instead of
+the line it actually annotated.
 
 ## Cost on Arc mainnet
 
