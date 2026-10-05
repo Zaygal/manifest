@@ -22,6 +22,17 @@ pragma solidity ^0.8.24;
 /// The contract never holds a balance between calls: everything sent in is
 /// distributed in the same transaction, and a single failed transfer reverts the
 /// entire batch rather than leaving it half paid.
+/// Three static-analysis findings are accepted here deliberately, because each
+/// one describes the product rather than a defect - they are listed so a reader
+/// knows they were considered rather than missed:
+///
+///  * `arbitrary-send-eth` - sending native value to a caller-supplied address is
+///    the entire purpose. The value never rests in this contract.
+///  * `calls-loop` - an external call in a loop is the batching. Nothing is read
+///    back from a payee, so a payee cannot influence the next line.
+///  * `require-revert-in-loop` - reverting mid-loop is the atomicity guarantee. A
+///    manifest is settled in full or not at all, which is why one refusing payee
+///    cannot leave the earlier lines paid.
 contract Manifest {
     /// @notice Number of batches this contract has settled. Doubles as the next
     /// batch id, so a receipt can be identified by (contract, batchId).
@@ -74,7 +85,7 @@ contract Manifest {
         }
 
         uint256 required;
-        for (uint256 i; i < n; ++i) {
+        for (uint256 i = 0; i < n; ++i) {
             if (payees[i] == address(0)) revert PayeeIsZero(i);
             if (amounts[i] == 0) revert AmountIsZero(i);
             required += amounts[i];
@@ -86,17 +97,22 @@ contract Manifest {
         batchId = ++batches;
         emit Batch(batchId, msg.sender, required, n, label);
 
-        for (uint256 i; i < n; ++i) {
+        for (uint256 i = 0; i < n; ++i) {
+            // Emitted BEFORE the transfer so the log order always matches the
+            // manifest order. Emitting afterwards would let a re-entrant payee
+            // interleave its own logs ahead of this line: every event carries its
+            // batchId so the reading stays unambiguous, but deterministic order
+            // costs nothing.
+            emit Paid(batchId, msg.sender, payees[i], amounts[i], notes[i]);
             (bool ok, ) = payees[i].call{value: amounts[i]}("");
             if (!ok) revert PaymentFailed(i, payees[i]);
-            emit Paid(batchId, msg.sender, payees[i], amounts[i], notes[i]);
         }
     }
 
     /// @notice Sum of a manifest, so a caller can compute the exact `msg.value`
     /// to send. Mirrors the check inside `pay`.
     function totalOf(uint256[] calldata amounts) external pure returns (uint256 sum) {
-        for (uint256 i; i < amounts.length; ++i) {
+        for (uint256 i = 0; i < amounts.length; ++i) {
             sum += amounts[i];
         }
     }

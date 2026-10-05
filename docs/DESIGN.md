@@ -37,6 +37,34 @@ trace in any log.
 - **A blocklist revert consumes gas without producing a receipt**, so batch
   verification never infers success from a missing receipt.
 
+## Static analysis: findings we accept, and why
+
+CI reports four findings that describe the product rather than a defect. They are
+documented in the source so that a reader knows they were weighed:
+
+| Finding | Why it stands |
+|---|---|
+| `arbitrary-send-eth` | Sending native value to a caller-supplied address **is** the product. Value never rests in the contract. |
+| `calls-loop` | The external call in a loop is the batching. Nothing is read back from a payee, so one line cannot influence the next. |
+| `require-revert-in-loop` | Reverting mid-loop is the atomicity guarantee. Full settlement or none. |
+| `reentrancy-events` | **Fixed, not accepted.** `Paid` is now emitted *before* the transfer, so log order always matches manifest order and a re-entrant payee cannot interleave its logs ahead of a line. |
+
+Two further warnings were genuine dead code and were fixed: an uninitialised loop
+counter that the linter read as a variable read before assignment, and an unused
+tuple binding in the tests.
+
+## Cost on Arc mainnet
+
+Measured by asking the chain, not by working it out by hand
+(`contracts/scripts/arc-cost.py`, run in CI):
+
+```
+deploy gas .................... 448,692
+deploy at the 20 Gwei floor ... 0.00897384 USDC
+one 3-line batch .............. 0.00373158 USDC
+deploy plus 3 batches ......... 0.02016858 USDC
+```
+
 ## Non-goals
 
 - No custody. Funds move payer to recipient inside a single transaction; the

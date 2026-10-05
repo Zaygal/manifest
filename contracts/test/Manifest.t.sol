@@ -75,7 +75,7 @@ contract ManifestTest {
     }
 
     function test_rejects_length_mismatch() public {
-        (address[] memory p, uint256[] memory a, string[] memory n) = lines();
+        (address[] memory p, , string[] memory n) = lines();
         uint256[] memory short = new uint256[](2);
         short[0] = 1e18;
         short[1] = 2e18;
@@ -150,7 +150,7 @@ contract ManifestTest {
         require(m.batches() == 0, "no batch recorded");
     }
 
-    function test_totalOf_matches_the_required_value() public {
+    function test_totalOf_matches_the_required_value() public view {
         (, uint256[] memory a, ) = lines();
         require(m.totalOf(a) == 6e18, "sum");
     }
