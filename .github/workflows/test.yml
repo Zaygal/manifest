@@ -1,0 +1,22 @@
+name: test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  forge:
+    name: build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: toolchain
+        run: forge --version
+      - name: build
+        run: forge build --sizes
+      - name: test
+        run: forge test -vv
