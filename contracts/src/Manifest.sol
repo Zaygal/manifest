@@ -33,7 +33,7 @@ contract Manifest {
         address indexed payer,
         uint256 total,
         uint256 lines,
-        string reference
+        string label
     );
 
     /// @notice Emitted once per line, so a batch can be read back line by line.
@@ -59,13 +59,13 @@ contract Manifest {
     /// @param amounts Amounts in the native unit, 18 decimals on Arc. One USDC is
     ///                1e18 - NOT 1e6, which is the habit this breaks.
     /// @param notes   A short note per line, for the receipt.
-    /// @param reference A label for the whole batch, for the receipt.
+    /// @param label A name for the whole batch, for the receipt.
     /// @return batchId The id of the settled batch, starting at 1.
     function pay(
         address[] calldata payees,
         uint256[] calldata amounts,
         string[] calldata notes,
-        string calldata reference
+        string calldata label
     ) external payable returns (uint256 batchId) {
         uint256 n = payees.length;
         if (n == 0) revert EmptyManifest();
@@ -84,7 +84,7 @@ contract Manifest {
         if (msg.value != required) revert NotFullyFunded(required, msg.value);
 
         batchId = ++batches;
-        emit Batch(batchId, msg.sender, required, n, reference);
+        emit Batch(batchId, msg.sender, required, n, label);
 
         for (uint256 i; i < n; ++i) {
             (bool ok, ) = payees[i].call{value: amounts[i]}("");
