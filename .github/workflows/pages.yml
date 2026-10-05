@@ -1,0 +1,46 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: publish the app
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      # The site serves what the repository actually compiles, so the page can
+      # never drift from the contract. The submission wants a link we can open,
+      # and this is it.
+      - name: publish the ABI and the initcode the page sends
+        run: |
+          mkdir -p ../web/build
+          forge inspect src/Manifest.sol:Manifest abi > ../web/build/abi.json
+          forge inspect src/Manifest.sol:Manifest bytecode > ../web/build/bytecode.txt
+          echo "abi: $(wc -c < ../web/build/abi.json) bytes"
+          echo "initcode: $(( ($(wc -c < ../web/build/bytecode.txt) - 3) / 2 )) bytes"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deploy
+        uses: actions/deploy-pages@v4

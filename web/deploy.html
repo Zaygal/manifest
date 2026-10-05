@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy Manifest to Arc</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Deploy Manifest</h1>
+  <p class="sub">One transaction on Arc mainnet. Your wallet signs it; this page never sees your key.</p>
+
+  <div class="panel">
+    <h2>What you are deploying</h2>
+    <div class="row"><span class="k">Contract</span><span class="v">Manifest</span></div>
+    <div class="row"><span class="k">Network</span><span class="v">Arc · chain 5042</span></div>
+    <div class="row"><span class="k">Initcode</span><span class="v" id="size">reading...</span></div>
+    <div class="row"><span class="k">Estimated cost</span><span class="v" id="cost">~0.009 USDC</span></div>
+    <div class="note">
+      Arc pays gas in USDC, so that number is dollars. The mempool refuses anything
+      below a 20 Gwei maxFeePerGas, which is why the estimate is not small change
+      dust but is still under a cent.
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Deploy</h2>
+    <p class="note" id="who">Not connected.</p>
+    <button id="go">Connect and deploy</button>
+    <div id="out"></div>
+  </div>
+
+  <div class="panel" id="after" style="display:none">
+    <h2>Deployed</h2>
+    <div class="row"><span class="k">Address</span><span class="v" id="addr"></span></div>
+    <div class="row"><span class="k">Transaction</span><span class="v" id="txh"></span></div>
+    <div class="row"><span class="k">Block</span><span class="v" id="blk"></span></div>
+    <div class="note">
+      Put that address in <code>web/address.txt</code> in the repository so the app
+      finds it automatically, or paste it into the app once and it will be
+      remembered on this device.
+    </div>
+    <button class="ghost" id="copy">Copy the address</button>
+  </div>
+
+  <div class="panel">
+    <h2>If it says no wallet was found</h2>
+    <p class="note">
+      A phone browser has no wallet built in. Open this page <b>inside</b> your
+      wallet's own browser, or use the deep link:
+      <br><br><code id="dl"></code>
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script src="app.js"></script>
+<script>
+(async function () {
+  const el = (id) => document.getElementById(id);
+  let bytecode = null;
+
+  el('dl').textContent = 'https://metamask.app.link/dapp/' + location.host + location.pathname;
+
+  try {
+    const a = await artifacts();
+    bytecode = a.bytecode;
+    if (bytecode) el('size').textContent = ((bytecode.length - 2) / 2).toLocaleString() + ' bytes';
+    else show(el('out'), 'build/bytecode.txt is missing. The CI workflow publishes it - check the pages job ran.');
+  } catch (e) {
+    show(el('out'), 'Could not load the contract: ' + e.message);
+  }
+
+  el('go').addEventListener('click', async function () {
+    const btn = el('go');
+    btn.disabled = true;
+    show(el('out'), '');
+    try {
+      const { signer, address } = await connect();
+      el('who').innerHTML = '<span class="pill ok">connected</span> ' + short(address) + ' on Arc';
+
+      show(el('out'), 'Waiting for your wallet to sign...');
+      const tx = await signer.sendTransaction({ data: bytecode });
+      show(el('out'), 'Sent ' + short(tx.hash) + '. Waiting for it to land.');
+      const rc = await tx.wait();
+
+      if (!rc || !rc.contractAddress) throw new Error('Mined, but no contract address came back.');
+      el('after').style.display = 'block';
+      el('addr').textContent = rc.contractAddress;
+      el('txh').innerHTML = '<a href="https://explorer.arc.io/tx/' + tx.hash + '" target="_blank" rel="noopener">' + short(tx.hash) + '</a>';
+      el('blk').textContent = String(rc.blockNumber);
+      show(el('out'), 'Deployed. That address is a live contract on Arc mainnet.', 'note');
+      btn.textContent = 'Deployed';
+      btn.disabled = true;
+    } catch (e) {
+      show(el('out'), (e && (e.shortMessage || e.message)) || String(e));
+      btn.disabled = false;
+    }
+  });
+
+  el('copy').addEventListener('click', async function () {
+    try { await navigator.clipboard.writeText(el('addr').textContent); el('copy').textContent = 'Copied'; }
+    catch (e) { el('copy').textContent = 'Select and copy it above'; }
+  });
+})();
+</script>
+</body>
+</html>

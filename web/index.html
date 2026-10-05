@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manifest - pay a list on Arc</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>Manifest</h1>
+  <p class="sub">Pay everyone on the list, and give each of them the proof.</p>
+
+  <div class="tabs">
+    <button id="tab-pay" class="ghost">Pay a list</button>
+    <button id="tab-receipt" class="ghost">Read a receipt</button>
+  </div>
+
+  <!-- ---------------------------------------------------------------- pay -->
+  <div id="pay">
+    <div class="panel">
+      <h2>The list</h2>
+      <p class="note">One person per line: <code>address, amount, note</code></p>
+      <label for="list">Manifest</label>
+      <textarea id="list" spellcheck="false"></textarea>
+      <div class="row"><span class="k">Lines</span><span class="v" id="count">0</span></div>
+      <div class="row"><span class="k">Total</span><span class="v big" id="total">0.00 USDC</span></div>
+      <div class="note">Amounts are in USDC. On Arc one USDC is 18 decimal places, not the 6 that ERC-20 USDC uses - this page handles that for you.</div>
+    </div>
+
+    <div class="panel" id="addpanel" style="display:none">
+      <h2>Contract address</h2>
+      <p class="note">No address was published with this page, so paste the one your deploy produced. It will be remembered on this device.</p>
+      <input id="addressInput" placeholder="0x..." spellcheck="false">
+      <button class="ghost" id="saveAddress">Remember it</button>
+    </div>
+
+    <div class="panel">
+      <h2>Settle</h2>
+      <p class="note" id="who">Not connected.</p>
+      <button id="payGo">Settle on Arc</button>
+      <div id="payOut"></div>
+    </div>
+  </div>
+
+  <!-- ------------------------------------------------------------ receipt -->
+  <div id="receipt" style="display:none">
+    <div class="panel">
+      <h2>Read a receipt</h2>
+      <p class="note">
+        Paste any transaction hash from Arc. The amounts are read from the chain's
+        own Transfer log, so this works for <b>any</b> USDC payment - not only ones
+        that went through Manifest.
+      </p>
+      <label for="txhash">Transaction</label>
+      <input id="txhash" placeholder="0x..." spellcheck="false">
+      <button id="readGo">Read it</button>
+      <div id="readOut"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Where the numbers come from</h2>
+    <p class="note">
+      On Arc every USDC movement - including a bare transfer with no calldata -
+      emits a Transfer event at the system emitter
+      <code>0xffff...FfE</code>, because Arc ships EIP-7708 early. On Ethereum the
+      same transfer emits nothing at all, which is why the person who was paid
+      normally has to take the payer's word for it. Here they do not.
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script src="app.js"></script>
+<script>
+(async function () {
+  const el = (id) => document.getElementById(id);
+  let A = { abi: null, bytecode: null, address: null };
+  let lines = [];
+  let stored = null;
+  // Declared HERE, not in a later script tag: reading an undeclared variable is
+  // a ReferenceError in JavaScript, not undefined, so ensureConnected() would
+  // have thrown the first time it looked at it.
+  let wallet = null;
+
+  el('list').value = [
+    '# one person per line: address, amount, note',
+    '0x0000000000000000000000000000000000000001, 1.25, design work',
+    '0x0000000000000000000000000000000000000002, 0.75, cover art',
+  ].join('\n');
+
+  try { stored = localStorage.getItem('manifest.address'); } catch (e) { stored = null; }
+  A = await artifacts();
+  if (!A.address && stored) A.address = stored;
+  el('addpanel').style.display = A.address ? 'none' : 'block';
+
+  function refresh() {
+    const r = parseLines(el('list').value);
+    lines = r.lines;
+    el('count').textContent = String(r.lines.length) + (r.bad.length ? ' (' + r.bad.length + ' skipped)' : '');
+    el('total').textContent = fmt(totalWei(r.lines)) + ' USDC';
+    if (r.bad.length) show(el('payOut'), 'Skipped: ' + r.bad.map(function (b) { return 'line ' + b.line + ' ' + b.why; }).join('; '));
+  }
+  el('list').addEventListener('input', refresh);
+  refresh();
+
+  el('saveAddress').addEventListener('click', function () {
+    const v = el('addressInput').value.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(v)) { show(el('payOut'), 'That is not an address.'); return; }
+    A.address = v;
+    try { localStorage.setItem('manifest.address', v); } catch (e) {}
+    el('addpanel').style.display = 'none';
+    show(el('payOut'), 'Remembered on this device.', 'note');
+  });
+
+  function tab(which) {
+    el('pay').style.display = which === 'pay' ? 'block' : 'none';
+    el('receipt').style.display = which === 'receipt' ? 'block' : 'none';
+    el('tab-pay').className = which === 'pay' ? '' : 'ghost';
+    el('tab-receipt').className = which === 'receipt' ? '' : 'ghost';
+  }
+  el('tab-pay').addEventListener('click', function () { tab('pay'); });
+  el('tab-receipt').addEventListener('click', function () { tab('receipt'); });
+  tab('pay');
+
+  async function ensureConnected() {
+    if (!window.ethereum) throw new Error('No wallet found. Open this page inside your wallet browser - the deep link is at the bottom of the deploy page.');
+    if (!wallet) { const w = await connect(); wallet = w; el('who').innerHTML = '<span class="pill ok">connected</span> ' + short(w.address); }
+    return wallet;
+  }
+
+  el('payGo').addEventListener('click', async function () {
+    const btn = el('payGo');
+    btn.disabled = true;
+    show(el('payOut'), '');
+    try {
+      if (!A.abi) throw new Error('build/abi.json is missing from the published site.');
+      if (!A.address) throw new Error('No contract address. Paste one above first.');
+      if (!lines.length) throw new Error('The list is empty.');
+      const w = await ensureConnected();
+      const c = new ethers.Contract(A.address, A.abi, w.signer);
+      const total = totalWei(lines);
+      const label = 'manifest ' + new Date().toISOString().slice(0, 10);
+
+      show(el('payOut'), 'Waiting for your wallet to sign...');
+      const tx = await c.pay(lines.map(function (l) { return l.payee; }),
+                            lines.map(function (l) { return l.wei; }),
+                            lines.map(function (l) { return l.note; }),
+                            label, { value: total });
+      show(el('payOut'), 'Sent ' + short(tx.hash) + '. Waiting for it to land.');
+      await tx.wait();
+      el('payOut').innerHTML = 'Settled in one transaction. <a href="https://explorer.arc.io/tx/' + tx.hash + '" target="_blank" rel="noopener">Open it</a>, or paste the hash into Read a receipt.';
+      btn.textContent = 'Settled';
+      setTimeout(function () { btn.textContent = 'Settle on Arc'; btn.disabled = false; }, 4000);
+    } catch (e) {
+      show(el('payOut'), (e && (e.shortMessage || e.message)) || String(e));
+      btn.disabled = false;
+    }
+  });
+
+  async function ensureReadProvider() {
+    if (wallet) return wallet.provider;
+    if (!window.ethereum) throw new Error('Reading needs a wallet browser too, because it is the only way to reach Arc from a page.');
+    const p = new ethers.BrowserProvider(window.ethereum, 'any');
+    wallet = { provider: p, signer: null, address: null };
+    return p;
+  }
+
+  el('readGo').addEventListener('click', async function () {
+    show(el('readOut'), 'Reading the chain...');
+    try {
+      const p = await ensureReadProvider();
+      const hash = el('txhash').value.trim();
+      if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('That is not a transaction hash.');
+      const rc = await p.getTransactionReceipt(hash);
+      if (!rc) throw new Error('No transaction with that hash on Arc mainnet.');
+      const tx = await p.getTransaction(hash);
+      const iface = A.abi ? new ethers.Interface(A.abi) : null;
+
+      const moved = [];
+      const paid = [];
+      let note = '';
+      rc.logs.forEach(function (log) {
+        if (log.address.toLowerCase() === EMITTER.toLowerCase() && log.topics[0] === TRANSFER_TOPIC) {
+          moved.push({ from: '0x' + log.topics[1].slice(26), to: '0x' + log.topics[2].slice(26), wei: BigInt(log.data) });
+        }
+        if (iface) {
+          try {
+            const parsed = iface.parseLog({ topics: log.topics.slice(), data: log.data });
+            if (parsed && parsed.name === 'Paid') paid.push({ payee: parsed.args[2], wei: parsed.args[3], note: parsed.args[4], batchId: parsed.args[0] });
+            if (parsed && parsed.name === 'Batch') note = parsed.args[4];
+          } catch (e) { /* not one of ours */ }
+        }
+      });
+
+      const nativeValue = tx ? BigInt(tx.value) : 0n;
+      let html = '<hr><div class="row"><span class="k">Transaction</span><span class="v"><a href="https://explorer.arc.io/tx/' + hash + '" target="_blank" rel="noopener">' + short(hash) + '</a></span></div>';
+      html += '<div class="row"><span class="k">Block</span><span class="v">' + rc.blockNumber + '</span></div>';
+      html += '<div class="row"><span class="k">Moved</span><span class="v big">' + fmt(nativeValue) + ' USDC</span></div>';
+      if (tx) html += '<div class="row"><span class="k">From</span><span class="v">' + short(tx.from) + '</span></div>';
+      if (note) html += '<div class="row"><span class="k">Reference</span><span class="v">' + note + '</span></div>';
+      html += '<div class="row"><span class="k">Transfer logs</span><span class="v">' + moved.length + '</span></div>';
+
+      if (paid.length) {
+        html += '<hr><h2>Lines</h2>';
+        paid.forEach(function (p2) {
+          html += '<div class="row"><span class="k">' + short(p2.payee) + '<br>' + (p2.note || '') + '</span><span class="v">' + fmt(p2.wei) + '</span></div>';
+        });
+      } else {
+        html += '<div class="note">This payment did not go through Manifest, so there are no notes to show. The amount is still provable - it is read from the chain, not from anyone&rsquo;s word.</div>';
+      }
+      moved.forEach(function (m) {
+        html += '<div class="row"><span class="k">' + short(m.from) + ' &rarr; ' + short(m.to) + '</span><span class="v">' + fmt(m.wei) + '</span></div>';
+      });
+
+      el('readOut').innerHTML = html;
+    } catch (e) {
+      show(el('readOut'), (e && (e.shortMessage || e.message)) || String(e));
+    }
+  });
+})();
+</script>
+</body>
+</html>
