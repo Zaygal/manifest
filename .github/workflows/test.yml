@@ -20,3 +20,11 @@ jobs:
         run: forge build --sizes
       - name: test
         run: forge test -vv
+
+      # Gas is paid in USDC on Arc and the mempool enforces a 20 Gwei floor, so
+      # what this costs to deploy is knowable. Ask the chain, before any USDC is
+      # spent, rather than trusting a number someone worked out by hand.
+      - name: what this costs to deploy on Arc mainnet
+        run: |
+          forge inspect src/Manifest.sol:Manifest bytecode > /tmp/bytecode.txt
+          python3 scripts/arc-cost.py /tmp/bytecode.txt
