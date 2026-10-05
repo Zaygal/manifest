@@ -1,0 +1,48 @@
+name: sync
+
+# Keeps the published site in step with contracts/. Pages is served from /docs on
+# the branch (build_type: legacy), which does not need an Actions runner to
+# publish - worth knowing, because a degraded-runner incident took the
+# Actions-based Pages deploy out and the site had to keep working.
+
+on:
+  push:
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/sync.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync
+
+jobs:
+  sync:
+    name: regenerate what the site serves
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: rebuild the ABI and the initcode
+        working-directory: contracts
+        run: |
+          mkdir -p ../docs/build
+          forge inspect src/Manifest.sol:Manifest abi > ../docs/build/abi.json
+          forge inspect src/Manifest.sol:Manifest bytecode > ../docs/build/bytecode.txt
+          echo "abi bytes: $(wc -c < ../docs/build/abi.json)"
+          echo "initcode bytes: $(wc -c < ../docs/build/bytecode.txt)"
+
+      - name: commit them back if the contract changed
+        run: |
+          git config user.name  "manifest-bot"
+          git config user.email "manifest-bot@users.noreply.github.com"
+          git add docs/build/abi.json docs/build/bytecode.txt
+          if git diff --cached --quiet; then
+            echo "already in sync with the committed contract"
+          else
+            git commit -m "build: regenerate the published ABI and initcode from contracts/"
+            git push
+          fi
