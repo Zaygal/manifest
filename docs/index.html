@@ -101,7 +101,11 @@
 
   try { stored = localStorage.getItem('manifest.address'); } catch (e) { stored = null; }
   A = await artifacts();
-  if (!A.address && stored) A.address = stored;
+  // A device-local address wins over the published one, because anyone who has
+  // deployed their own Manifest should keep pointing at theirs. The published
+  // address is the fallback, and it is what makes the app usable on a first
+  // visit with nothing to paste.
+  if (stored) A.address = stored;
   el('addpanel').style.display = A.address ? 'none' : 'block';
 
   function refresh() {
