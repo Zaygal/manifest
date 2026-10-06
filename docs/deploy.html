@@ -37,9 +37,7 @@
     <div class="row"><span class="k">Transaction</span><span class="v" id="txh"></span></div>
     <div class="row"><span class="k">Block</span><span class="v" id="blk"></span></div>
     <div class="note">
-      Put that address in <code>web/address.txt</code> in the repository so the app
-      finds it automatically, or paste it into the app once and it will be
-      remembered on this device.
+      Paste that address into the app once and it will be remembered on this device.
     </div>
     <button class="ghost" id="copy">Copy the address</button>
   </div>
@@ -59,15 +57,29 @@
 <script>
 (async function () {
   const el = (id) => document.getElementById(id);
+
+  // Measured against Arc mainnet by eth_estimateGas in CI (contracts/scripts/arc-cost.py).
+  // If the contract changes, CI reprints this; keep the two in step.
+  const DEPLOY_GAS = 447821n;
+
   let bytecode = null;
 
   el('dl').textContent = 'https://metamask.app.link/dapp/' + location.host + location.pathname;
+
+  // USDC on Arc is the native asset at 18 decimals, not 6. Formatting a balance
+  // with the ERC-20 habit would be wrong by a factor of a trillion here.
+  function fmt(wei) {
+    const s = wei.toString().padStart(19, '0');
+    const whole = s.slice(0, -18).replace(/^0+(?=\d)/, '');
+    const frac = s.slice(-18).replace(/0+$/, '');
+    return frac ? whole + '.' + frac : whole;
+  }
 
   try {
     const a = await artifacts();
     bytecode = a.bytecode;
     if (bytecode) el('size').textContent = ((bytecode.length - 2) / 2).toLocaleString() + ' bytes';
-    else show(el('out'), 'build/bytecode.txt is missing. The CI workflow publishes it - check the pages job ran.');
+    else show(el('out'), 'build/bytecode.txt is missing. CI publishes it - check the sync job ran.');
   } catch (e) {
     show(el('out'), 'Could not load the contract: ' + e.message);
   }
@@ -80,7 +92,36 @@
       const { signer, address } = await connect();
       el('who').innerHTML = '<span class="pill ok">connected</span> ' + short(address) + ' on Arc';
 
-      show(el('out'), 'Waiting for your wallet to sign...');
+      // Check affordability BEFORE asking the wallet to sign. Arc pays gas in
+      // native USDC at a 20 Gwei floor, so a wallet holding dust can be unable to
+      // deploy a contract that costs well under a cent - and the wallet's own
+      // error for that is opaque. Saying it here, with the exact shortfall, is
+      // more useful than a rejection the user cannot interpret.
+      const provider = signer.provider;
+      const feeData = await provider.getFeeData();
+      const fee = feeData.maxFeePerGas || feeData.gasPrice;
+      const need = DEPLOY_GAS * fee;
+
+      let bal = null;
+      try { bal = await provider.getBalance(address); } catch (e) { /* balance is best-effort */ }
+
+      el('cost').textContent = fmt(need) + ' USDC';
+
+      if (bal !== null && bal < need) {
+        show(el('out'),
+          'Not enough USDC on Arc to deploy. This address holds ' + fmt(bal) +
+          ' and the deploy needs ' + fmt(need) +
+          ', so it is short by ' + fmt(need - bal) + ' USDC. ' +
+          'Send a little USDC to ' + short(address) + ' on Arc, then tap again.',
+          'bad');
+        btn.disabled = false;
+        return;
+      }
+
+      show(el('out'), bal !== null
+        ? 'Balance covers it (' + fmt(bal) + ' USDC). Waiting for your wallet to sign...'
+        : 'Waiting for your wallet to sign...');
+
       const tx = await signer.sendTransaction({ data: bytecode });
       show(el('out'), 'Sent ' + short(tx.hash) + '. Waiting for it to land.');
       const rc = await tx.wait();
@@ -94,7 +135,7 @@
       btn.textContent = 'Deployed';
       btn.disabled = true;
     } catch (e) {
-      show(el('out'), (e && (e.shortMessage || e.message)) || String(e));
+      show(el('out'), (e && (e.shortMessage || e.message)) || String(e), 'bad');
       btn.disabled = false;
     }
   });
