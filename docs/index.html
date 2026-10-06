@@ -92,6 +92,11 @@
   // a ReferenceError in JavaScript, not undefined, so ensureConnected() would
   // have thrown the first time it looked at it.
   let wallet = null;
+  // Separate from `wallet` on purpose. The receipt view is read-only, and giving
+  // it the shared `wallet` object would leave that object holding a provider with
+  // no signer - which the pay path checks for with `if (!wallet)` before it ever
+  // connects a signer, so settling would then fail on a null signer.
+  let readProvider = null;
 
   // The example deliberately uses a payee that cannot be parsed as an address.
   // The previous version pre-filled 0x0000...0001 and 0x0000...0002, which are
@@ -179,12 +184,19 @@
     }
   });
 
+  // Reading a receipt is read-only: it needs an RPC endpoint, not a wallet. A
+  // public Arc RPC is reachable straight from the page, so anyone holding the
+  // transaction hash can verify what was paid - which is the whole point of the
+  // receipt, and the reason a recipient should not need anything installed to
+  // check it. A wallet, where one exists, is only preferred because it is already
+  // there. This used to throw without one, which locked recipients out of their
+  // own proof and made the feature look broken to anyone in an ordinary browser.
   async function ensureReadProvider() {
-    if (wallet) return wallet.provider;
-    if (!window.ethereum) throw new Error('Reading needs a wallet browser too, because it is the only way to reach Arc from a page.');
-    const p = new ethers.BrowserProvider(window.ethereum, 'any');
-    wallet = { provider: p, signer: null, address: null };
-    return p;
+    if (readProvider) return readProvider;
+    readProvider = window.ethereum
+      ? new ethers.BrowserProvider(window.ethereum, 'any')
+      : new ethers.JsonRpcProvider('https://rpc.mainnet.arc.io', 5042);
+    return readProvider;
   }
 
   el('readGo').addEventListener('click', async function () {
