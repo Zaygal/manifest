@@ -11,6 +11,25 @@ Arc mainnet · chain ID 5042 · USDC is the native asset
 
 ---
 
+## Live on Arc mainnet
+
+- **The app** — <https://zaygal.github.io/manifest/>
+- **The contract** — `0xe0436a564d77ef02c3c7aec13253f050fd89bb6f`
+
+It has settled a real batch. Three payments, one transaction, no approvals:
+
+| | |
+|---|---|
+| transaction | [`0x328259da…8acc4d`](https://explorer.arc.io/tx/0x328259da76614fd8de1efb7f8b5a09c18128fc1df3a7dff6f05739f18e8acc4d) |
+| paid | 0.01 `design work`, 0.02 `cover art`, 0.03 `translation` |
+| cost | 86,452 gas — 0.00185872 USDC |
+
+**A receipt anyone can open, with no wallet installed:**
+<https://zaygal.github.io/manifest/?tx=0x328259da76614fd8de1efb7f8b5a09c18128fc1df3a7dff6f05739f18e8acc4d>
+
+That is read from Arc's own logs in the browser. Nothing in it comes from a server
+we run, because there isn't one.
+
 ## The problem this solves
 
 Paying twenty people at once does not work on other chains:
@@ -40,10 +59,25 @@ Two halves, and the second one is the product:
    payer.
 2. **A receipt** each recipient can open, reconstructed from Arc's own event log
    rather than from any database we control. Nobody has to trust a screenshot.
+   `?tx=<hash>` opens one; `&for=<address>` marks that person's own line.
+
+## What it does not prove
+
+Worth being exact about, because a receipt that overstates itself is worse than
+none:
+
+- The **amounts, recipients and block are read from the chain** and cannot be
+  altered by us.
+- The **notes are the payer's own words.** They are a claim, not a verified fact.
+- A batch proves **who paid whom, and how much.** It says nothing about whether the
+  work was done.
 
 ## Status
 
-In development. See `docs/DESIGN.md`.
+Deployed and working on Arc mainnet, and exercised: a real batch has settled and
+its receipt reads correctly from a browser with no wallet. 11/11 contract tests run
+in CI, which also measures the deploy cost against the live chain and refuses to
+publish an ABI the site could not parse.
 
 ## Build
 
