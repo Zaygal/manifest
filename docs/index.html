@@ -93,10 +93,17 @@
   // have thrown the first time it looked at it.
   let wallet = null;
 
+  // The example deliberately uses a payee that cannot be parsed as an address.
+  // The previous version pre-filled 0x0000...0001 and 0x0000...0002, which are
+  // valid, non-zero addresses: anyone who tapped Settle without replacing them
+  // would have sent real USDC to accounts nobody holds the keys to. An example
+  // that cannot be submitted by accident teaches the format just as well, and the
+  // 'skipped' counter shows the validation working.
   el('list').value = [
     '# one person per line: address, amount, note',
-    '0x0000000000000000000000000000000000000001, 1.25, design work',
-    '0x0000000000000000000000000000000000000002, 0.75, cover art',
+    '# replace PAYEEADDRESS with a real address before settling',
+    '0xPAYEEADDRESS, 1.25, design work',
+    '0xPAYEEADDRESS, 0.75, cover art',
   ].join('\n');
 
   try { stored = localStorage.getItem('manifest.address'); } catch (e) { stored = null; }
