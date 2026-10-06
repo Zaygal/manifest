@@ -175,7 +175,18 @@
                             label, { value: total });
       show(el('payOut'), 'Sent ' + short(tx.hash) + '. Waiting for it to land.');
       await tx.wait();
-      el('payOut').innerHTML = 'Settled in one transaction. <a href="https://explorer.arc.io/tx/' + tx.hash + '" target="_blank" rel="noopener">Open it</a>, or paste the hash into Read a receipt.';
+      // The product promises each person a link they can check. A receipt you have
+      // to be told the hash for, and then find the right tab for, is not one you
+      // can hand over, so the links are produced here rather than described.
+      const base = location.origin + location.pathname;
+      let out = 'Settled in one transaction. <a href="https://explorer.arc.io/tx/' + tx.hash + '" target="_blank" rel="noopener">Open it on the explorer</a>.';
+      out += '<hr><div class="note">Send each person their own link - it opens this receipt with their line marked:</div>';
+      lines.forEach(function (l) {
+        const url = base + '?tx=' + tx.hash + '&for=' + l.payee;
+        out += '<div class="row"><span class="k">' + short(l.payee) + '<br>' + (l.note || '') +
+               '</span><span class="v"><a href="' + url + '">receipt</a></span></div>';
+      });
+      el('payOut').innerHTML = out;
       btn.textContent = 'Settled';
       setTimeout(function () { btn.textContent = 'Settle on Arc'; btn.disabled = false; }, 4000);
     } catch (e) {
@@ -209,6 +220,10 @@
       if (!rc) throw new Error('No transaction with that hash on Arc mainnet.');
       const tx = await p.getTransaction(hash);
       const iface = A.abi ? new ethers.Interface(A.abi) : null;
+      // &for=<address> is how a recipient's own link is marked. It is only used to
+      // point at a line, never to change a number: every amount still comes from
+      // the chain, so a link cannot flatter the person opening it.
+      const forAddr = (new URLSearchParams(location.search).get('for') || '').trim().toLowerCase();
 
       const moved = [];
       const paid = [];
@@ -235,9 +250,19 @@
       html += '<div class="row"><span class="k">Transfer logs</span><span class="v">' + moved.length + '</span></div>';
 
       if (paid.length) {
+        if (forAddr) {
+          const mine = paid.filter(function (p2) { return String(p2.payee).toLowerCase() === forAddr; });
+          html += mine.length
+            ? '<hr><div class="note"><span class="pill ok">yours</span> This batch pays ' + short(forAddr) +
+              ' ' + mine.length + (mine.length === 1 ? ' time' : ' times') + ', for ' +
+              fmt(mine.reduce(function (a, b) { return a + b.wei; }, 0n)) + ' USDC in total.</div>'
+            : '<hr><div class="note">This batch does not pay ' + short(forAddr) +
+              '. You may have been sent the wrong receipt - nothing here was changed to say otherwise.</div>';
+        }
         html += '<hr><h2>Lines</h2>';
         paid.forEach(function (p2) {
-          html += '<div class="row"><span class="k">' + short(p2.payee) + '<br>' + (p2.note || '') + '</span><span class="v">' + fmt(p2.wei) + '</span></div>';
+          const isMine = forAddr && String(p2.payee).toLowerCase() === forAddr;
+          html += '<div class="row"><span class="k">' + (isMine ? '<span class="pill ok">yours</span> ' : '') + short(p2.payee) + '<br>' + (p2.note || '') + '</span><span class="v">' + fmt(p2.wei) + '</span></div>';
         });
       } else {
         html += '<div class="note">This payment did not go through Manifest, so there are no notes to show. The amount is still provable - it is read from the chain, not from anyone&rsquo;s word.</div>';
@@ -251,6 +276,19 @@
       show(el('readOut'), (e && (e.shortMessage || e.message)) || String(e));
     }
   });
+
+  // ?tx=<hash> makes a receipt a link rather than something to be pasted. It runs
+  // last, after the handlers above are attached, because it drives them.
+  (function () {
+    const hash = (new URLSearchParams(location.search).get('tx') || '').trim();
+    if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) return;
+    const tab = Array.prototype.slice.call(document.querySelectorAll('button')).filter(function (b) {
+      return b.textContent.trim() === 'Read a receipt';
+    })[0];
+    if (tab) tab.click();
+    el('txhash').value = hash;
+    el('readGo').click();
+  })();
 })();
 </script>
 </body>
