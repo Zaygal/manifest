@@ -30,7 +30,16 @@
 
     <div class="panel" id="addpanel" style="display:none">
       <h2>Contract address</h2>
-      <p class="note">No address was published with this page, so paste the one your deploy produced. It will be remembered on this device.</p>
+      <p class="note">
+        This is the address of the <b>Manifest contract</b>, not your wallet. It is
+        where a batch gets sent and where receipts are read from, so the app cannot
+        do either without one.
+        <br><br>
+        If you have not deployed it yet there is nothing to paste: deploying is one
+        transaction on Arc, about 0.009 USDC, and it happens on
+        <a href="deploy.html">the deploy page</a>. That page hands you the address
+        when the transaction lands, and saves it here for you.
+      </p>
       <input id="addressInput" placeholder="0x..." spellcheck="false">
       <button class="ghost" id="saveAddress">Remember it</button>
     </div>

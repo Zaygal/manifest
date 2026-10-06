@@ -37,8 +37,11 @@
     <div class="row"><span class="k">Transaction</span><span class="v" id="txh"></span></div>
     <div class="row"><span class="k">Block</span><span class="v" id="blk"></span></div>
     <div class="note">
-      Paste that address into the app once and it will be remembered on this device.
+      Saved on this device, so the app picks it up with no pasting. Keep the address
+      anyway - it is the contract's identity on Arc, and it is what a recipient's
+      receipt link points at.
     </div>
+    <p><a href="index.html">Open the app</a></p>
     <button class="ghost" id="copy">Copy the address</button>
   </div>
 
@@ -129,6 +132,10 @@
       if (!rc || !rc.contractAddress) throw new Error('Mined, but no contract address came back.');
       el('after').style.display = 'block';
       el('addr').textContent = rc.contractAddress;
+      // The app is on the same origin, so hand the address over directly rather
+      // than asking someone to copy a 42-character hex string between two pages
+      // on a phone. The app reads this key on load.
+      try { localStorage.setItem('manifest.address', rc.contractAddress); } catch (e) {}
       el('txh').innerHTML = '<a href="https://explorer.arc.io/tx/' + tx.hash + '" target="_blank" rel="noopener">' + short(tx.hash) + '</a>';
       el('blk').textContent = String(rc.blockNumber);
       show(el('out'), 'Deployed. That address is a live contract on Arc mainnet.', 'note');
