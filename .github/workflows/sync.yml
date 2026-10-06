@@ -30,10 +30,38 @@ jobs:
         working-directory: contracts
         run: |
           mkdir -p ../docs/build
-          forge inspect src/Manifest.sol:Manifest abi > ../docs/build/abi.json
+          # --json matters: without it, and on current Foundry, `forge inspect abi`
+          # pretty-prints a human-readable table of signatures and selectors. That
+          # table then gets served as abi.json and every fetch in the browser fails
+          # to parse it, silently, because the page catches the error and behaves
+          # as though no ABI were published at all.
+          forge inspect src/Manifest.sol:Manifest abi --json > ../docs/build/abi.json
           forge inspect src/Manifest.sol:Manifest bytecode > ../docs/build/bytecode.txt
-          echo "abi bytes: $(wc -c < ../docs/build/abi.json)"
-          echo "initcode bytes: $(wc -c < ../docs/build/bytecode.txt)"
+
+      # The guard that would have caught the above before it reached the site.
+      - name: refuse to publish anything the browser cannot parse
+        working-directory: contracts
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          abi = pathlib.Path('../docs/build/abi.json')
+          try:
+              parsed = json.loads(abi.read_text())
+          except Exception as exc:
+              sys.exit('abi.json is not valid JSON, so the site would silently break: %s' % exc)
+          if not isinstance(parsed, list) or not parsed:
+              sys.exit('abi.json parsed but is not a non-empty ABI array')
+          names = [e.get('name') for e in parsed if e.get('type') in ('function', 'event')]
+          for needed in ('pay', 'Paid', 'Batch'):
+              if needed not in names:
+                  sys.exit('abi.json is missing %s' % needed)
+          print('abi.json is valid: %d entries, includes pay/Paid/Batch' % len(parsed))
+
+          bc = pathlib.Path('../docs/build/bytecode.txt').read_text().strip()
+          if not bc.startswith('0x') or len(bc) < 100:
+              sys.exit('bytecode.txt does not look like deployment code')
+          print('bytecode.txt is valid: %d bytes of initcode' % ((len(bc) - 2) // 2))
+          PY
 
       - name: commit them back if the contract changed
         run: |
