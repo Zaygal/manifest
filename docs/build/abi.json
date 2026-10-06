@@ -1,58 +1,27 @@
-[
-  {
-    "type": "function",
-    "name": "pay",
-    "stateMutability": "payable",
-    "inputs": [
-      { "name": "payees",  "type": "address[]" },
-      { "name": "amounts", "type": "uint256[]" },
-      { "name": "notes",   "type": "string[]" },
-      { "name": "label",   "type": "string" }
-    ],
-    "outputs": [{ "name": "batchId", "type": "uint256" }]
-  },
-  {
-    "type": "function",
-    "name": "batches",
-    "stateMutability": "view",
-    "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256" }]
-  },
-  {
-    "type": "function",
-    "name": "totalOf",
-    "stateMutability": "pure",
-    "inputs": [{ "name": "amounts", "type": "uint256[]" }],
-    "outputs": [{ "name": "sum", "type": "uint256" }]
-  },
-  {
-    "type": "event",
-    "name": "Batch",
-    "anonymous": false,
-    "inputs": [
-      { "name": "batchId", "type": "uint256", "indexed": true },
-      { "name": "payer",   "type": "address", "indexed": true },
-      { "name": "total",   "type": "uint256", "indexed": false },
-      { "name": "lines",   "type": "uint256", "indexed": false },
-      { "name": "label",   "type": "string",  "indexed": false }
-    ]
-  },
-  {
-    "type": "event",
-    "name": "Paid",
-    "anonymous": false,
-    "inputs": [
-      { "name": "batchId", "type": "uint256", "indexed": true },
-      { "name": "payer",   "type": "address", "indexed": true },
-      { "name": "payee",   "type": "address", "indexed": true },
-      { "name": "amount",  "type": "uint256", "indexed": false },
-      { "name": "note",    "type": "string",  "indexed": false }
-    ]
-  },
-  { "type": "error", "name": "EmptyManifest",  "inputs": [] },
-  { "type": "error", "name": "LengthMismatch", "inputs": [ { "name": "payees", "type": "uint256" }, { "name": "amounts", "type": "uint256" }, { "name": "notes", "type": "uint256" } ] },
-  { "type": "error", "name": "PayeeIsZero",    "inputs": [ { "name": "index", "type": "uint256" } ] },
-  { "type": "error", "name": "AmountIsZero",   "inputs": [ { "name": "index", "type": "uint256" } ] },
-  { "type": "error", "name": "NotFullyFunded", "inputs": [ { "name": "required", "type": "uint256" }, { "name": "sent", "type": "uint256" } ] },
-  { "type": "error", "name": "PaymentFailed",  "inputs": [ { "name": "index", "type": "uint256" }, { "name": "payee", "type": "address" } ] }
-]
+
+╭----------+--------------------------------------------------------------------+--------------------------------------------------------------------╮
+| Type     | Signature                                                          | Selector                                                           |
++====================================================================================================================================================+
+| event    | Batch(uint256,address,uint256,uint256,string)                      | 0x0f882b9956a8fd5d05fd2d0c44671f67dcbef555881ba1bb35935dd2c0eae46b |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| event    | Paid(uint256,address,address,uint256,string)                       | 0xde51bf99a8f8a1b25106457310fce464763c3bc2abf7613915c1f9eb5b45d697 |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| error    | AmountIsZero(uint256)                                              | 0x1a385ce0                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| error    | EmptyManifest()                                                    | 0xd9313d29                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| error    | LengthMismatch(uint256,uint256,uint256)                            | 0x8ee979f5                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| error    | NotFullyFunded(uint256,uint256)                                    | 0x91ad6d68                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| error    | PayeeIsZero(uint256)                                               | 0x53c081b8                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| error    | PaymentFailed(uint256,address)                                     | 0xd3a57022                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| function | batches() view returns (uint256)                                   | 0xcfdf677e                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| function | pay(address[],uint256[],string[],string) payable returns (uint256) | 0xdafb2017                                                         |
+|----------+--------------------------------------------------------------------+--------------------------------------------------------------------|
+| function | totalOf(uint256[]) pure returns (uint256)                          | 0x74db5b27                                                         |
+╰----------+--------------------------------------------------------------------+--------------------------------------------------------------------╯
+
